@@ -235,6 +235,46 @@ class Import < ApplicationRecord
     )
   end
 
+  # Auto-detect column mappings based on canonical header names
+  # This matches headers from Sure's CSV export format
+  CANONICAL_COLUMN_MAPPINGS = {
+    "date" => :date_col_label,
+    "amount" => :amount_col_label,
+    "name" => :name_col_label,
+    "currency" => :currency_col_label,
+    "category" => :category_col_label,
+    "tags" => :tags_col_label,
+    "account" => :account_col_label,
+    "notes" => :notes_col_label,
+    "qty" => :qty_col_label,
+    "ticker" => :ticker_col_label,
+    "price" => :price_col_label,
+    "entity_type" => :entity_type_col_label,
+    "exchange_operating_mic" => :exchange_operating_mic_col_label
+  }.freeze
+
+  def auto_detect_columns!
+    return unless raw_file_str.present?
+
+    headers = csv_headers
+    return if headers.blank?
+
+    # Build a hash of lowercase header => original header for case-insensitive matching
+    header_lookup = headers.index_by { |h| h.to_s.downcase.strip }
+
+    detected_mappings = {}
+
+    CANONICAL_COLUMN_MAPPINGS.each do |canonical_name, attribute|
+      # Try exact match first (case-insensitive)
+      if header_lookup.key?(canonical_name)
+        detected_mappings[attribute] = header_lookup[canonical_name]
+      end
+    end
+
+    # Only update if we detected at least one column
+    update!(detected_mappings) if detected_mappings.any?
+  end
+
   def max_row_count
     10000
   end
