@@ -108,7 +108,7 @@ module Enrichable
     # Without this cleanup, the UI would hide the suggestion (due to category_id.nil? check),
     # but stale data would remain in the extra JSONB column. This keeps the database clean
     # and prevents confusion when debugging or auditing transaction state.
-    if is_a?(Transaction) && enrichable_attrs.key?(:category_id) && was_modified
+    if is_a?(Transaction) && enrichable_attrs.any? { |attr, _| attr == :category_id } && was_modified
       clear_category_suggestion! if respond_to?(:clear_category_suggestion!)
     end
 
