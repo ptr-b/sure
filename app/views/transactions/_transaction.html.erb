@@ -101,6 +101,9 @@
                       <% end %>
                     <% end %>
 
+                    <%# Category suggestion with inline approve/reject %>
+                    <%= render "transactions/category_suggestion", transaction: transaction %>
+
                     <% if transaction.transfer.present? %>
                       <%= render "transactions/transfer_match", transaction: transaction %>
                     <% end %>

@@ -194,6 +194,7 @@ Rails.application.routes.draw do
     collection do
       delete :clear_filter
       patch :update_preferences
+      post :generate_category_suggestions
     end
 
     member do
@@ -202,6 +203,8 @@ Rails.application.routes.draw do
       post :mark_as_recurring
       post :merge_duplicate
       post :dismiss_duplicate
+      post :accept_category_suggestion
+      post :dismiss_category_suggestion
     end
   end
 

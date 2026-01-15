@@ -45,6 +45,61 @@
       <% end %>
     <% end %>
 
+    <%# Category suggestion alert %>
+    <% if @entry.transaction.has_category_suggestion? %>
+      <% suggested_cat = @entry.transaction.suggested_category %>
+      <% if suggested_cat %>
+        <% alert_class = @entry.transaction.high_confidence_suggestion? ? "border-success bg-success/5" : "border-info bg-info/5" %>
+        <% icon_color = @entry.transaction.high_confidence_suggestion? ? "success" : "info" %>
+
+        <div class="mx-4 my-3 p-4 rounded-lg border <%= alert_class %>">
+          <div class="flex items-start gap-3">
+            <%= icon "sparkles", size: "md", color: icon_color %>
+            <div class="flex-1 space-y-2">
+              <h4 class="text-sm font-medium text-primary">
+                <%= t("transactions.show.category_suggestion_title") %>
+              </h4>
+              <p class="text-sm text-secondary">
+                <% if @entry.transaction.merchant_based_suggestion? %>
+                  <%= t("transactions.show.category_suggestion_merchant_description",
+                        count: @entry.transaction.category_suggestion_data["merchant_history_count"],
+                        percentage: @entry.transaction.category_suggestion_data["match_percentage"],
+                        merchant: @entry.transaction.merchant.name) %>
+                <% else %>
+                  <%= t("transactions.show.category_suggestion_ai_description") %>
+                <% end %>
+              </p>
+
+              <div class="mt-3 p-3 rounded bg-container border border-primary">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-primary"><%= suggested_cat.name %></p>
+                    <p class="text-xs text-secondary">
+                      <%= t("transactions.show.suggestion_source_#{@entry.transaction.suggestion_source}") %>
+                      • <%= t("transactions.show.confidence_#{@entry.transaction.suggestion_confidence}") %>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 mt-3">
+                <%= button_to t("transactions.show.accept_category"),
+                    accept_category_suggestion_transaction_path(@entry.transaction),
+                    method: :post,
+                    class: "btn btn--primary btn--sm",
+                    data: { turbo_frame: "_top" } %>
+                <%= button_to t("transactions.show.dismiss_category"),
+                    dismiss_category_suggestion_transaction_path(@entry.transaction),
+                    method: :post,
+                    class: "btn btn--outline btn--sm",
+                    data: { turbo_frame: "_top" } %>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+
     <% dialog.with_section(title: t(".overview"), open: true) do %>
       <div class="pb-4">
         <%= styled_form_with model: @entry,

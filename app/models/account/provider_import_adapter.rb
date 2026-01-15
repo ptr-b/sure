@@ -170,6 +170,15 @@ class Account::ProviderImportAdapter
       entry.save!
       entry.transaction.save! if entry.transaction.changed?
 
+      # AFTER save: Generate category suggestions for uncategorized transactions
+      if entry.entryable.is_a?(Transaction) && !incoming_pending && entry.transaction.category_id.nil?
+        begin
+          Transaction::MerchantCategorizer.new(entry.transaction).suggest_and_store!
+        rescue StandardError => e
+          Rails.logger.warn("Failed to generate category suggestion for entry #{entry.id}: #{e.message}")
+        end
+      end
+
       # AFTER save: For NEW posted transactions, check for fuzzy matches to SUGGEST (not auto-claim)
       # This handles tip adjustments where auto-matching is too risky
       if is_new_posted

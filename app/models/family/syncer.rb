@@ -22,6 +22,7 @@ class Family::Syncer
 
   def perform_post_sync
     family.auto_match_transfers!
+    family.auto_suggest_categories!
   end
 
   private

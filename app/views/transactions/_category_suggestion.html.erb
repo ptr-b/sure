@@ -1,0 +1,30 @@
+<%# locals: (transaction:) %>
+
+<div id="<%= dom_id(transaction, "category_suggestion") %>" class="flex items-center gap-1">
+  <% if transaction.has_category_suggestion? %>
+    <% suggested_cat = transaction.suggested_category %>
+    <% if suggested_cat %>
+      <span class="hidden lg:inline-flex items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary" title="<%= t("transactions.category_suggestion.suggested_category_tooltip", category: suggested_cat.name) %>">
+        <%= icon "sparkles", size: "sm", class: "mr-0.5" %>
+        <%= suggested_cat.name %>
+      </span>
+      <span class="inline-flex lg:hidden items-center rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-secondary" title="<%= t("transactions.category_suggestion.suggested_category_tooltip", category: suggested_cat.name) %>">
+        <%= icon "sparkles", size: "sm" %>
+      </span>
+
+      <%= button_to accept_category_suggestion_transaction_path(transaction),
+                      method: :post,
+                      class: "text-secondary flex items-center justify-center cursor-pointer",
+                      title: t("transactions.category_suggestion.accept_tooltip") do %>
+        <%= icon "check", size: "sm", class: "text-secondary hover:text-primary" %>
+      <% end %>
+
+      <%= button_to dismiss_category_suggestion_transaction_path(transaction),
+                      method: :post,
+                      class: "text-secondary hover:text-primary flex items-center justify-center cursor-pointer",
+                      title: t("transactions.category_suggestion.dismiss_tooltip") do %>
+        <%= icon "x", size: "sm", class: "text-subdued hover:text-primary" %>
+      <% end %>
+    <% end %>
+  <% end %>
+</div>

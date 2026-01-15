@@ -98,6 +98,20 @@ module Enrichable
       end
     end
 
+    # CLEANUP: Clear category suggestions when category_id is enriched
+    # This prevents showing stale suggestions after a category has been set by:
+    # - Rules (auto-categorization)
+    # - Provider imports (Plaid/SimpleFIN with category data)
+    # - Manual edits (user sets category directly)
+    # - AI categorization
+    #
+    # Without this cleanup, the UI would hide the suggestion (due to category_id.nil? check),
+    # but stale data would remain in the extra JSONB column. This keeps the database clean
+    # and prevents confusion when debugging or auditing transaction state.
+    if is_a?(Transaction) && enrichable_attrs.key?(:category_id) && was_modified
+      clear_category_suggestion! if respond_to?(:clear_category_suggestion!)
+    end
+
     # Return whether any attributes were actually saved
     was_modified
   end

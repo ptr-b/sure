@@ -140,6 +140,101 @@ class Transaction < ApplicationRecord
     true
   end
 
+  # Category suggestion methods
+
+  def has_category_suggestion?
+    category_suggestion_data.present? &&
+      !category_suggestion_dismissed? &&
+      category_id.nil? # only show if still uncategorized
+  end
+
+  def suggested_category
+    return nil unless has_category_suggestion?
+    Category.find_by(id: category_suggestion_data["category_id"])
+  end
+
+  def suggested_category_name
+    category_suggestion_data&.dig("category_name")
+  end
+
+  def suggestion_confidence
+    category_suggestion_data&.dig("confidence") || "medium"
+  end
+
+  def suggestion_source
+    category_suggestion_data&.dig("source")
+  end
+
+  def merchant_based_suggestion?
+    suggestion_source == "merchant_history"
+  end
+
+  def ai_based_suggestion?
+    suggestion_source == "ai"
+  end
+
+  def high_confidence_suggestion?
+    suggestion_confidence == "high"
+  end
+
+  def category_suggestion_dismissed?
+    category_suggestion_data&.dig("dismissed") == true
+  end
+
+  def category_suggestion_data
+    return nil unless extra.is_a?(Hash)
+    extra["category_suggestion"]
+  end
+
+  # Accept the category suggestion
+  def accept_category_suggestion!
+    return false unless has_category_suggestion?
+
+    suggested_cat = suggested_category
+    return false unless suggested_cat
+
+    # Use enrichment pattern to create audit trail
+    enrichment_succeeded = enrich_attribute(
+      :category_id,
+      suggested_cat.id,
+      source: suggestion_source,
+      metadata: category_suggestion_data
+    )
+
+    # Only proceed if enrichment actually succeeded
+    return false unless enrichment_succeeded
+
+    lock_attr!(:category_id)
+
+    # Clear the suggestion
+    clear_category_suggestion!
+
+    Rails.logger.info("User accepted category suggestion for transaction #{id}: #{suggested_category_name}")
+    true
+  end
+
+  # Dismiss the category suggestion
+  def dismiss_category_suggestion!
+    return false unless category_suggestion_data.present?
+
+    updated_extra = (extra || {}).deep_dup
+    updated_extra["category_suggestion"]["dismissed"] = true
+    update!(extra: updated_extra)
+
+    Rails.logger.info("User dismissed category suggestion for transaction #{id}")
+    true
+  end
+
+  # Clear the suggestion entirely
+  def clear_category_suggestion!
+    return false unless category_suggestion_data.present?
+
+    updated_extra = (extra || {}).deep_dup
+    updated_extra.delete("category_suggestion")
+    update!(extra: updated_extra)
+    true
+  end
+
   private
 
     def potential_posted_match_data

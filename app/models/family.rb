@@ -55,6 +55,27 @@ class Family < ApplicationRecord
     Merchant.where(id: (assigned_ids + recently_unlinked_ids + family_merchant_ids).uniq)
   end
 
+  def auto_suggest_categories!
+    suggested_count = 0
+
+    # Find all uncategorized, non-pending transactions with merchants
+    candidate_transactions = transactions
+      .where(category_id: nil)
+      .where.not(merchant_id: nil)
+      .merge(Transaction.excluding_pending)
+      .includes(:merchant, entry: :account)
+
+    Rails.logger.info("SUGG: Auto-suggesting categories for #{candidate_transactions.count} transactions in family #{id}")
+
+    candidate_transactions.find_each do |transaction|
+      suggester = Transaction::MerchantCategorizer.new(transaction)
+      suggested_count += 1 if suggester.suggest_and_store!
+    end
+
+    Rails.logger.info("SUGG: Generated #{suggested_count} category suggestions for family #{id}")
+    suggested_count
+  end
+
   def auto_categorize_transactions_later(transactions, rule_run_id: nil)
     AutoCategorizeJob.perform_later(self, transaction_ids: transactions.pluck(:id), rule_run_id: rule_run_id)
   end

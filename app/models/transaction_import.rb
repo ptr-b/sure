@@ -79,6 +79,18 @@ class TransactionImport < Import
 
       # Bulk import new transactions
       Transaction.import!(new_transactions, recursive: true) if new_transactions.any?
+
+      # Generate category suggestions for newly imported uncategorized transactions
+      new_transactions.each do |transaction|
+        next if transaction.category_id.present?
+        next if transaction.merchant_id.blank?
+
+        begin
+          Transaction::MerchantCategorizer.new(transaction).suggest_and_store!
+        rescue StandardError => e
+          Rails.logger.warn("Failed to generate category suggestion for transaction #{transaction.id}: #{e.message}")
+        end
+      end
     end
   end
 

@@ -70,6 +70,15 @@ class TransactionsController < ApplicationController
       @entry.lock_saved_attributes!
       @entry.transaction.lock_attr!(:tag_ids) if @entry.transaction.tags.any?
 
+      # Generate category suggestion if transaction is uncategorized
+      if @entry.transaction.category_id.nil? && @entry.transaction.merchant_id.present?
+        begin
+          Transaction::MerchantCategorizer.new(@entry.transaction).suggest_and_store!
+        rescue StandardError => e
+          Rails.logger.warn("Failed to generate category suggestion for transaction #{@entry.transaction.id}: #{e.message}")
+        end
+      end
+
       flash[:notice] = "Transaction created"
 
       respond_to do |format|
@@ -147,6 +156,66 @@ class TransactionsController < ApplicationController
     Rails.logger.error("Failed to dismiss duplicate suggestion for transaction #{params[:id]}: #{e.message}")
     flash[:alert] = t("transactions.dismiss_duplicate.failure")
     redirect_back_or_to transactions_path
+  end
+
+  def accept_category_suggestion
+    transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+
+    if transaction.accept_category_suggestion!
+      flash[:notice] = t("transactions.accept_category_suggestion.success",
+                         category: transaction.category.name)
+    else
+      flash[:alert] = t("transactions.accept_category_suggestion.failure")
+    end
+
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordInvalid => e
+    Rails.logger.error("Failed to accept category suggestion for transaction #{params[:id]}: #{e.message}")
+    flash[:alert] = t("transactions.accept_category_suggestion.failure")
+    redirect_back_or_to transactions_path
+  end
+
+  def dismiss_category_suggestion
+    transaction = Current.family.transactions.includes(entry: :account).find(params[:id])
+
+    if transaction.dismiss_category_suggestion!
+      flash[:notice] = t("transactions.dismiss_category_suggestion.success")
+    else
+      flash[:alert] = t("transactions.dismiss_category_suggestion.failure")
+    end
+
+    redirect_back_or_to transactions_path
+  rescue ActiveRecord::RecordInvalid => e
+    Rails.logger.error("Failed to dismiss category suggestion for transaction #{params[:id]}: #{e.message}")
+    flash[:alert] = t("transactions.dismiss_category_suggestion.failure")
+    redirect_back_or_to transactions_path
+  end
+
+  def generate_category_suggestions
+    suggested_count = 0
+
+    # Find all uncategorized, non-pending transactions with merchants
+    transactions = Current.family.transactions
+      .where(category_id: nil)
+      .where.not(merchant_id: nil)
+      .merge(Transaction.excluding_pending)
+      .includes(:merchant, entry: :account)
+
+    Rails.logger.debug("SUGG: Generating category suggestions for #{transactions.count} uncategorized transactions")
+
+    transactions.find_each do |transaction|
+      Rails.logger.debug("SUGG: Processing transaction #{transaction.id} with merchant #{transaction.merchant.name}")
+      suggester = Transaction::MerchantCategorizer.new(transaction)
+      suggested_count += 1 if suggester.suggest_and_store!
+    end
+
+    Rails.logger.debug("SUGG: Generated #{suggested_count} category suggestions")
+
+    if suggested_count > 0
+      redirect_to transactions_path, notice: t("transactions.category_suggestions.created", count: suggested_count)
+    else
+      redirect_to transactions_path, notice: t("transactions.category_suggestions.none_created")
+    end
   end
 
   def convert_to_trade

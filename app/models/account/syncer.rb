@@ -13,6 +13,7 @@ class Account::Syncer
 
   def perform_post_sync
     account.family.auto_match_transfers!
+    account.family.auto_suggest_categories!
   end
 
   private
