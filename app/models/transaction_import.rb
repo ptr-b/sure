@@ -1,3 +1,5 @@
+require "digest/md5"
+
 class TransactionImport < Import
   def import!
     transaction do
@@ -27,13 +29,34 @@ class TransactionImport < Import
         category = mappings.categories.mappable_for(row.category)
         tags = row.tags_list.map { |tag| mappings.tags.mappable_for(tag) }.compact
 
+        # Use adapter for merchant creation and duplicate detection
+        adapter = Account::ProviderImportAdapter.new(mapped_account)
+
+        # Create merchant from transaction name (similar to Enable Banking integration)
+        merchant = if row.name.present?
+          merchant_name = row.name.to_s.strip
+          unless merchant_name.blank?
+            merchant_id = Digest::MD5.hexdigest(merchant_name.downcase)
+
+            begin
+              adapter.find_or_create_merchant(
+                provider_merchant_id: "csv_merchant_#{merchant_id}",
+                name: merchant_name,
+                source: "csv"
+              )
+            rescue ActiveRecord::RecordInvalid => e
+              Rails.logger.error "TransactionImport - Failed to create merchant '#{merchant_name}': #{e.message}"
+              nil
+            end
+          end
+        end
+
         # Use account's currency when no currency column was mapped in CSV, with family currency as fallback
         effective_currency = currency_col_label.present? ? row.currency : (mapped_account.currency.presence || family.currency)
 
         # Check for duplicate transactions using the adapter's deduplication logic
         # Pass claimed_entry_ids to exclude entries we've already matched in this import
         # This ensures identical rows within the CSV are all imported as separate transactions
-        adapter = Account::ProviderImportAdapter.new(mapped_account)
         duplicate_entry = adapter.find_duplicate_transaction(
           date: row.date_iso,
           amount: row.signed_amount,
@@ -46,6 +69,7 @@ class TransactionImport < Import
           # Update existing transaction instead of creating a new one
           duplicate_entry.transaction.category = category if category.present?
           duplicate_entry.transaction.tags = tags if tags.any?
+          duplicate_entry.transaction.merchant = merchant if merchant.present?
           duplicate_entry.notes = row.notes if row.notes.present?
           duplicate_entry.import = self
           duplicate_entry.import_locked = true  # Protect from provider sync overwrites
@@ -57,6 +81,7 @@ class TransactionImport < Import
           new_transactions << Transaction.new(
             category: category,
             tags: tags,
+            merchant: merchant,
             entry: Entry.new(
               account: mapped_account,
               date: row.date_iso,
